@@ -172,7 +172,7 @@ class recipeGui():
         
  
     def removeStep(self, row=-1):
-        if self.recipeTable.rowCount &amp;gt; 0:
+        if self.recipeTable.rowCount &gt; 0:
           if row == -1:
               row = self.recipeTable.currentRow()
           self.recipeTable.removeRow(row)
@@ -181,7 +181,7 @@ class recipeGui():
 
     def moveUp(self):
         row = self.recipeTable.currentRow()
-        if row &amp;gt; 0:
+        if row &gt; 0:
             self.addStep(row-1)
             self.recipeTable.cellWidget(row-1, 0).text = self.recipeTable.cellWidget(row+1, 0).text
             self.recipeTable.cellWidget(row-1, 1).text = self.recipeTable.cellWidget(row+1, 1).text
@@ -192,7 +192,7 @@ class recipeGui():
             
     def moveDown(self):
         row = self.recipeTable.currentRow()
-        if row &amp;lt; self.recipeTable.rowCount-1:
+        if row &lt; self.recipeTable.rowCount-1:
             self.addStep(row+2) 
             self.recipeTable.cellWidget(row+2, 0).text = self.recipeTable.cellWidget(row, 0).text
             self.recipeTable.cellWidget(row+2, 1).text = self.recipeTable.cellWidget(row, 1).text
@@ -461,6 +461,7 @@ if __name__ == '__main__':
   action.title = "Shadow\nevaporation\nprocess"
   action.on_triggered = gui.show
   menu.insert_separator("@toolbar.end", "name")
-  menu.insert_item('@toolbar.end', "Edit recipe", action)&lt;/text&gt;
+  menu.insert_item('@toolbar.end', "Edit recipe", action)
+  
 </text>
 </klayout-macro>
