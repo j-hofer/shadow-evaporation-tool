@@ -6,7 +6,7 @@ At the moment, the macro is in an early stage and the functionality is limited. 
 
 # Installation
 
-Install the macro using built-in KLayout package manager: In the KLayout main window, select "Tools">"Manage Packages" from the menu bar, then select the package from the list of available packages and install by clicking "Apply".
+Install the macro using built-in KLayout package manager: In the KLayout main window, select "Tools">"Manage Packages" from the menu bar, then select the package from the list of available packages and install by clicking "Apply". 
 
 # Usage
 
