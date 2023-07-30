@@ -1,0 +1,466 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description>Shadow Evaporation Tool</description>
+ <version>0.1</version>
+ <category/>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>true</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>false</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text>import pya
+import json
+
+def renameTab(tabwidget, text='default', index=1):
+    print(f'index: {index}')
+    print(f'text: {text}')
+    print(f'widget: {widget}')
+    tabwidget.setTabText(index+1, text)
+    tabwidget.setTabText(0, 'not main tab')
+
+class recipeGui():
+
+    def __init__(self):
+        
+        pya.QLocale.setDefault(pya.QLocale.c())
+    
+        self.SHOW_WARNING = True
+    
+        self.DEFAULT_MASK_HEIGHT = 720
+        self.DEFUALT_MAX_MASK_HEIGHT = 1000
+
+
+        self.window = pya.QWidget()
+        self.window.setWindowTitle('Shadow evaporation process editor')
+        self.window.setMinimumSize(pya.QSize(400, 200))
+        
+
+        
+        # top vertical layout, containing the recipe TreeWidget
+        # and the bottom part of the window
+        self.topLayout = pya.QVBoxLayout(self.window)
+        
+        self.recipeData = {}
+        
+        self.recipeTable = pya.QTableWidget()
+        self.recipeTable.setColumnCount(4)
+        self.recipeTable.setRowCount(0)
+        self.recipeTable.setHorizontalHeaderLabels(['Name', 'Layer', 'Dataype', 'Tilt angle (°)'])
+        self.recipeTable.horizontalHeader.setStretchLastSection(True)
+        self.recipeTable.horizontalHeader.resizeSection(0, 140)
+        self.recipeTable.horizontalHeader.resizeSection(1, 55)
+        self.recipeTable.horizontalHeader.resizeSection(2, 55)
+        self.topLayout.addWidget(self.recipeTable)
+
+        #self.recipeTable.setSizeAdjustPolicy(pya.QAbstractScrollArea.AdjustToContents)
+        self.recipeEdits = []
+        self.addStep()
+
+        self.moveLayout = pya.QHBoxLayout()
+
+        self.addButton = pya.QPushButton('+')
+        self.moveLayout.addWidget(self.addButton)
+        self.addButton.clicked(lambda: self.addStep(-1))
+        
+        self.removeButton = pya.QPushButton('-')
+        self.removeButton.clicked(lambda: self.removeStep(-1))
+        self.moveLayout.addWidget(self.removeButton)
+        
+        self.upButton = pya.QPushButton('↑')
+        self.upButton.clicked(self.moveUp)
+        self.moveLayout.addWidget(self.upButton)
+        self.downButton = pya.QPushButton('↓')
+        self.downButton.clicked(self.moveDown)
+        self.moveLayout.addWidget(self.downButton)
+        self.topLayout.addLayout(self.moveLayout)
+
+
+        self.maskTab = pya.QTabWidget()
+
+        self.maskTabWidget = pya.QWidget()
+        self.maskTabLayout = pya.QFormLayout(self.maskTabWidget)
+        self.maskHeightEdit = pya.QSpinBox()
+        self.maskHeightEdit.setMinimum(0)
+        self.maskHeightEdit.setMaximum(self.DEFUALT_MAX_MASK_HEIGHT)
+        self.maskHeightEdit.setValue(self.DEFAULT_MASK_HEIGHT)
+        self.maskHeightEdit.valueChanged(self.maskHeightChanged)
+        self.maskHeightSlider = pya.QSlider()
+        self.maskHeightSlider.setOrientation(pya.Qt_Orientation(1))
+        self.maskHeightSlider.setMinimum(0)
+        self.maskHeightSlider.setMaximum(self.DEFUALT_MAX_MASK_HEIGHT)
+        self.maskHeightSlider.setSingleStep(1)
+        self.maskHeightSlider.setValue(self.DEFAULT_MASK_HEIGHT)
+        self.maxMaskHeightEdit = pya.QLineEdit()
+        self.maxMaskHeightEdit.text = str(self.DEFUALT_MAX_MASK_HEIGHT)
+        self.maxMaskHeightEdit.setValidator(pya.QIntValidator(self.maxMaskHeightEdit))
+        self.maxMaskHeightEdit.returnPressed(self.maxMaskHeightChanged)
+        self.maskHeightSlider.valueChanged(lambda: self.slide(self.maskHeightSlider, self.maskHeightEdit))
+        self.maskLayerEdit = pya.QLineEdit()
+        self.maskLayerEdit.setValidator(pya.QIntValidator(self.maskLayerEdit))
+        self.maskDatatypeEdit = pya.QLineEdit()
+        self.maskDatatypeEdit.setValidator(pya.QIntValidator(self.maskDatatypeEdit))
+        self.maskTabLayout.addRow('Mask layer index', self.maskLayerEdit)
+        self.maskTabLayout.addRow('Mask datatype index', self.maskDatatypeEdit)
+        self.maskTabLayout.addRow('Mask height (nm)', self.maskHeightEdit)
+        self.maskTabLayout.addRow('', self.maskHeightSlider)
+        self.maskTabLayout.addRow('Max. mask height (nm)', self.maxMaskHeightEdit)
+
+        self.maskTab.insertTab(0, self.maskTabWidget, 'Mask properties')
+
+        self.topLayout.addWidget(self.maskTab)
+        
+        
+        
+        self.bottomLayout = pya.QHBoxLayout()
+        self.saveButton = pya.QPushButton('Save')
+        self.saveButton.clicked(self.save)
+        
+        self.loadButton = pya.QPushButton('Load')
+        self.loadButton.clicked(self.load)        
+        
+        self.autoApplyCheck = pya.QCheckBox('Auto apply')
+        self.autoApplyCheck.clicked(self.checkAndApply)
+                
+        self.applyButton = pya.QPushButton('Apply')
+        self.applyButton.setSizePolicy(pya.QSizePolicy.Minimum, pya.QSizePolicy.Minimum)
+        self.applyButton.clicked(self.applyDialog)
+        
+        self.bottomLayout.addWidget(self.saveButton)
+        self.bottomLayout.addWidget(self.loadButton)
+        self.bottomLayout.addStretch()
+        self.bottomLayout.addWidget(self.autoApplyCheck)
+        self.bottomLayout.addWidget(self.applyButton)
+
+        self.topLayout.addLayout(self.bottomLayout)
+
+        self.fileDialog = pya.QFileDialog(self.window)
+        
+
+
+    def addStep(self, row=-1):    
+
+        if row == -1:
+            row = self.recipeTable.currentRow() + 1       
+        self.recipeTable.insertRow(row)
+        nameEdit = pya.QLineEdit() # string, needs no validator
+        self.recipeTable.setCellWidget(row, 0, nameEdit)
+        layerIndexEdit = pya.QLineEdit()
+        layerIndexEdit.setValidator(pya.QIntValidator(layerIndexEdit))
+        self.recipeTable.setCellWidget(row, 1, layerIndexEdit)
+        datatypeIndexEdit = pya.QLineEdit()
+        datatypeIndexEdit.setValidator(pya.QIntValidator(datatypeIndexEdit))
+        self.recipeTable.setCellWidget(row, 2, datatypeIndexEdit)
+        polarAngleEdit = pya.QDoubleSpinBox()
+        polarAngleEdit.setValue(0)
+        polarAngleEdit.setMinimum(-90)
+        polarAngleEdit.setMaximum(90)
+        polarAngleEdit.setSingleStep(0.5)
+        polarAngleEdit.decimals = 1
+        polarAngleEdit.valueChanged(self.checkAndApply)
+        self.recipeTable.setCellWidget(row, 3, polarAngleEdit)
+
+        azimuthalAngleEdit = pya.QDoubleSpinBox()        
+        self.recipeEdits.insert(row, [nameEdit, layerIndexEdit, datatypeIndexEdit, polarAngleEdit, azimuthalAngleEdit] )
+     
+        
+ 
+    def removeStep(self, row=-1):
+        if self.recipeTable.rowCount &amp;gt; 0:
+          if row == -1:
+              row = self.recipeTable.currentRow()
+          self.recipeTable.removeRow(row)
+          self.recipeEdits.pop(row)
+    
+
+    def moveUp(self):
+        row = self.recipeTable.currentRow()
+        if row &amp;gt; 0:
+            self.addStep(row-1)
+            self.recipeTable.cellWidget(row-1, 0).text = self.recipeTable.cellWidget(row+1, 0).text
+            self.recipeTable.cellWidget(row-1, 1).text = self.recipeTable.cellWidget(row+1, 1).text
+            self.recipeTable.cellWidget(row-1, 2).text = self.recipeTable.cellWidget(row+1, 2).text
+            self.recipeTable.cellWidget(row-1, 3).value = self.recipeTable.cellWidget(row+1, 3).value
+            self.removeStep(row+1)
+
+            
+    def moveDown(self):
+        row = self.recipeTable.currentRow()
+        if row &amp;lt; self.recipeTable.rowCount-1:
+            self.addStep(row+2) 
+            self.recipeTable.cellWidget(row+2, 0).text = self.recipeTable.cellWidget(row, 0).text
+            self.recipeTable.cellWidget(row+2, 1).text = self.recipeTable.cellWidget(row, 1).text
+            self.recipeTable.cellWidget(row+2, 2).text = self.recipeTable.cellWidget(row, 2).text
+            self.recipeTable.cellWidget(row+2, 3).value = self.recipeTable.cellWidget(row, 3).value
+            self.removeStep(row)
+
+        
+    def slide(self, slider, edit):
+        edit.setValue(slider.value)
+
+    def maskHeightChanged(self):
+        self.checkAndApply()
+        self.maskHeightSlider.setValue(self.maskHeightEdit.value)
+        
+    def maxMaskHeightChanged(self):
+        text = self.maxMaskHeightEdit.text
+        if text != '':
+            self.maskHeightEdit.setMaximum(int(float(text)))
+            self.maskHeightSlider.setMaximum(int(float(text)))
+
+    def checkAndApply(self):
+      if self.autoApplyCheck.checkState == pya.Qt_CheckState.Checked:
+        self.applyDialog()
+   
+    def applyDialog(self):
+        if self.SHOW_WARNING:
+            dialog = pya.QDialog(self.window)
+            dialog.windowTitle = 'Apply specified process?'
+            layout = pya.QVBoxLayout(dialog)
+            label1 = pya.QLabel('&amp;lt;b&amp;gt;All layers specified in the process will be cleared!&amp;lt;/b&amp;gt;')
+            warningfont = pya.QFont()
+            warningfont.setPointSize(10)
+            label1.setFont(warningfont)
+            layout.addWidget(label1)
+            label2 = pya.QLabel('These changes can be undone with Ctrl+Z. The \'Auto apply\' option may add a large number of changes to the undo stack.')
+            label2.setWordWrap(True)
+            label2.setFont(warningfont)
+            layout.addWidget(label2)
+            sublayout = pya.QHBoxLayout()
+            layout.addLayout(sublayout)
+            
+            dialog.setMinimumSize(pya.QSize(375, 100))
+            dialog.setMaximumSize(pya.QSize(375, 100))
+                        
+            def cancel():
+                self.autoApplyCheck.checkState = pya.Qt_CheckState.Unchecked
+                dialog.done(0)
+            dialog.rejected(cancel)
+                        
+            abortButton = pya.QPushButton('Cancel')
+            abortButton.clicked(cancel)
+            sublayout.addWidget(abortButton)
+            
+            def ok():
+                result = self.applyRecipe()
+                dialog.done(int(result))
+            
+            okButton = pya.QPushButton('Apply')
+            okButton.clicked(ok)
+            sublayout.addWidget(okButton)
+            
+            def okAndIgnore():
+                self.SHOW_WARNING = False
+                result = self.applyRecipe()
+                dialog.done(int(result))
+            
+            okAndIgnoreButton = pya.QPushButton('Apply and do not show this again')
+            okAndIgnoreButton.clicked(okAndIgnore)
+            sublayout.addWidget(okAndIgnoreButton)
+        
+            dialog.exec_()
+            if dialog.result == 0:
+              self.autoApplyCheck.checkState = pya.Qt_CheckState.Unchecked
+
+        else:
+            result = self.applyRecipe()
+            if result == False:
+              self.autoApplyCheck.checkState = pya.Qt_CheckState.Unchecked
+        
+    def applyRecipe(self):
+      try:
+        # register a transaction for undo
+        view = pya.LayoutView.current()
+        view.transaction("Clear layers, then apply shadow evaporation process")
+        
+        
+        nrows = self.recipeTable.rowCount
+        try:
+            source_layer_index = int(self.maskLayerEdit.text)
+            source_datatype_index = int(self.maskDatatypeEdit.text)
+
+        except ValueError:
+            warning = pya.QMessageBox(self.window)
+            warning.setWindowTitle('Error - Shadow evaporation tool')
+            warning.setText('Error: Mask layer not specified')
+            warning.exec_()
+            return False
+        try:
+            mask_height = self.maskHeightEdit.value/1e3
+        except ValueError:
+            warning = pya.QMessageBox(self.window)
+            warning.setWindowTitle('Error - Shadow evaporation tool')
+            warning.setText('Error: Mask height not specified')
+            warning.exec_()
+            return False
+        
+        cv = pya.Application.instance().main_window().current_view().active_cellview()
+        
+        cell = cv.cell
+        layout = cv.layout()
+        source_layer = layout.layer(source_layer_index, source_datatype_index)
+        shapes_source = cell.shapes(source_layer)
+        
+        
+        for i in range(self.recipeTable.rowCount):
+            polar_angle = float(self.recipeTable.cellWidget(i, 3).value)
+            try:
+                dest_layer_index = int(self.recipeTable.cellWidget(i, 1).text)
+                dest_datatype_index = int(self.recipeTable.cellWidget(i, 2).text)
+
+            except ValueError:
+                warning = pya.QMessageBox(self.window)
+                warning.setWindowTitle('Error - Shadow evaporation tool')
+                warning.setText(f'Layer not specified in step {i+1}')
+                warning.exec_()
+                return False
+            dest_layer = layout.layer(dest_layer_index, dest_datatype_index)
+            shapes_dest = cell.shapes(dest_layer)
+            
+            layout.clear_layer(dest_layer)
+
+            dy = math.tan(polar_angle*2*math.pi/360)*mask_height
+
+            transformation = pya.Matrix3d(1, 0, -0, 1, 0, dy)
+            for sh in shapes_source.each():
+                shapes_dest.insert(transformation*sh.dpolygon)
+        
+        view.commit()
+        return True
+      except Exception as e:
+        warning = pya.QMessageBox(self.window)
+        warning.setWindowTitle('Error - Shadow evaporation tool')
+        warning.setText(f'Error: {e}')
+        warning.exec_()
+        return False
+    
+    def applyRecipeAndIgnore(self):
+      self.SHOW_WARNING = False
+      self.applyRecipe()
+    
+    def save(self):
+      try:
+        source_layer_index = int(self.maskLayerEdit.text)
+        source_datatype_index = int(self.maskDatatypeEdit.text)
+      except ValueError:
+        warning = pya.QMessageBox(self.window)
+        warning.setWindowTitle('Error - Shadow evaporation tool')
+        warning.setText('Error: Mask layer not specified')
+        warning.exec_()
+        return
+      try:
+        mask_height_nm = int(self.maskHeightEdit.value)
+      except ValueError:
+        warning = pya.QMessageBox(self.window)
+        warning.setWindowTitle('Error - Shadow evaporation tool')
+        warning.setText('Error: Mask height not specified')
+        warning.exec_()
+        return
+      try:
+        max_mask_height_nm = int(self.maxMaskHeightEdit.text)
+      except ValueError:
+        warning = pya.QMessageBox(self.window)
+        warning.setWindowTitle('Error - Shadow evaporation tool')
+        warning.setText('Error: Maximum mask height not specified')
+        warning.exec_()
+        return
+      mask_properties = {'Mask layer index':  source_layer_index,
+                         'Mask datatype index': source_datatype_index,
+                         'Mask height (nm)': mask_height_nm,
+                         'Maximum mask height (nm)': max_mask_height_nm}
+      step_dict = {}
+      for i in range(self.recipeTable.rowCount):
+        key = f'Step {i+1}'
+        name = self.recipeTable.cellWidget(i, 0).text
+        if name == None:
+          name = ''
+        try:
+          dest_layer_index = int(self.recipeTable.cellWidget(i, 1).text)
+          dest_datatype_index = int(self.recipeTable.cellWidget(i, 2).text)
+        except ValueError:
+          warning = pya.QMessageBox(self.window)
+          warning.setWindowTitle('Error - Shadow evaporation tool')
+          warning.setText(f'Error: Layer not specified in step {i+1}')
+          warning.exec_()
+          return
+        polar_angle = float(self.recipeTable.cellWidget(i, 3).value)
+        step_dict[key] = {'Name': name,
+                          'Layer index': dest_layer_index,
+                          'Datatype index': dest_datatype_index,
+                          'Tilt angle (deg)': polar_angle}
+      print('test')
+      data = {'Mask properties': mask_properties, 'Deposition steps': step_dict}
+      print(data)
+      print(data)
+      savepath = self.fileDialog.getSaveFileName(self.window, 'Save process data', '', "Evaporation processes (*.prc.json)")
+      with open(savepath, 'w+') as f:
+        try:
+          data = json.dump(data, f, indent=4)
+        except Exception as e:
+          print(e)
+        
+    def load(self):
+      
+      try:
+        self.autoApplyCheck.checkState = pya.Qt_CheckState.Unchecked
+        loadpath = self.fileDialog.getOpenFileName(self.window, 'Load process data', '', 'Evaporation processes (*.prc.json)')
+        with open(loadpath, 'r') as f:
+          data = json.load(f)
+          
+        self.maskLayerEdit.text = str(data['Mask properties']['Mask layer index'])
+        self.maskDatatypeEdit.text = str(data['Mask properties']['Mask datatype index'])
+        self.maxMaskHeightEdit.text = str(data['Mask properties']['Maximum mask height (nm)'])
+        self.maskHeightSlider.setMaximum(data['Mask properties']['Maximum mask height (nm)'])
+        self.maskHeightEdit.setMaximum(data['Mask properties']['Maximum mask height (nm)'])
+        self.maskHeightEdit.setValue(int(data['Mask properties']['Mask height (nm)']))
+      
+        # clear table
+        for i in range(self.recipeTable.rowCount):
+          self.removeStep(0)
+        
+        no_steps = len(data['Deposition steps'].keys())
+        steps = data['Deposition steps']
+        for i, key in enumerate(steps.keys()):
+          name = steps[key]['Name']
+          layer_ix = steps[key]['Layer index']
+          dt_ix = steps[key]['Datatype index']
+          angle = steps[key]['Tilt angle (deg)']
+          self.addStep(i)
+          self.recipeTable.cellWidget(i, 0).text = str(name)
+          self.recipeTable.cellWidget(i, 1).text = str(layer_ix)
+          self.recipeTable.cellWidget(i, 2).text = str(dt_ix)
+          self.recipeTable.cellWidget(i, 3).value = float(angle)
+
+        
+      except Exception as e:
+        print(e)
+        warning = pya.QMessageBox(self.window)
+        warning.setWindowTitle('Error - Shadow evaporation tool')
+        warning.setText(f'Error loading file:\n{e}')
+        warning.exec_()
+        return
+        
+    def show(self):
+      self.window.show()
+        
+
+if __name__ == '__main__':
+
+  gui = recipeGui()
+
+  app = pya.Application.instance()
+  menu = app.main_window().menu()
+  
+  action = pya.Action()
+  action.title = "Shadow\nevaporation\nprocess"
+  action.on_triggered = gui.show
+  menu.insert_separator("@toolbar.end", "name")
+  menu.insert_item('@toolbar.end', "Edit recipe", action)&lt;/text&gt;
+</text>
+</klayout-macro>
