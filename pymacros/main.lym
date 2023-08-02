@@ -17,6 +17,7 @@
  <dsl-interpreter-name/>
  <text>import pya
 import json
+import math
 
 def renameTab(tabwidget, text='default', index=1):
     print(f'index: {index}')
