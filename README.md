@@ -25,7 +25,7 @@ A pop-up will warn you about this before applying the process to the GDS file. Y
 
 ### Angle conventions
 
-The tilt angle is specified in degrees. Positive angles correspond to upwards displacement and vice versa. The definition of the angles relies on the correct alignment of the sample inside the evaporation machine. Also, the evaporator may use different angle conventions or zero references. In this case the angles specified in the macro need to be translated to the convention of the used evaporator.
+The angles are specified in degrees. Positive tilt angles correspond to upwards displacement and vice versa. The planetary (or azimuthal) angle corresponds to a rotation around an axis prependicular to the substrate. The definition of the angles relies on the correct alignment of the sample inside the evaporation machine. Also, the evaporator may use different angle conventions or zero references. In this case the angles specified in the macro need to be translated to the convention of the used evaporator.
 
 ### Auto apply
 
@@ -44,9 +44,7 @@ Processes can be saved as an easily readable and modifiable `.json` file. The fi
 
 * Due to the finite thickness of the suspended mask, structures at deposited at higher polar angles get compressed. At the moment, this is not taken into account by the macro.
 
-* Rotation along an axis perpendicular to the substrate (azimuthal/planetary rotation) are not taken into account.
-
-Compression and azimuthal rotation may be included upon expressed demand.
+This compression may be included upon expressed demand.
 
 * Structures can only be placed on the substrate in regions where the lower resist layer has been removed (suspended regions/"undercut"). Shadows can either be deposited on the walls of the lower resist layer and fall onto the main structure upon resist lift off, or they can be supressed completely, depending on the deposition angle and the defined undercut. This behaviour should be taken into account by the user and there are no intentios to add estimations about this to the macro.
 
