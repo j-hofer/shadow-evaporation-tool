@@ -8,7 +8,6 @@
  <doc/>
  <autorun>true</autorun>
  <autorun-early>false</autorun-early>
- <priority>0</priority>
  <shortcut/>
  <show-in-menu>false</show-in-menu>
  <group-name/>
@@ -40,7 +39,7 @@ class recipeGui():
 
         self.window = pya.QWidget()
         self.window.setWindowTitle('Shadow evaporation process editor')
-        self.window.setMinimumSize(pya.QSize(400, 200))
+        self.window.setMinimumSize(pya.QSize(500, 200))
         
 
         
@@ -51,9 +50,9 @@ class recipeGui():
         self.recipeData = {}
         
         self.recipeTable = pya.QTableWidget()
-        self.recipeTable.setColumnCount(4)
+        self.recipeTable.setColumnCount(5)
         self.recipeTable.setRowCount(0)
-        self.recipeTable.setHorizontalHeaderLabels(['Name', 'Layer', 'Dataype', 'Tilt angle (°)'])
+        self.recipeTable.setHorizontalHeaderLabels(['Name', 'Layer', 'Dataype', 'Tilt angle (°)', 'Planetary angle (°)'])
         self.recipeTable.horizontalHeader.setStretchLastSection(True)
         self.recipeTable.horizontalHeader.resizeSection(0, 140)
         self.recipeTable.horizontalHeader.resizeSection(1, 55)
@@ -166,9 +165,16 @@ class recipeGui():
         polarAngleEdit.decimals = 1
         polarAngleEdit.valueChanged(self.checkAndApply)
         self.recipeTable.setCellWidget(row, 3, polarAngleEdit)
-
-        azimuthalAngleEdit = pya.QDoubleSpinBox()        
-        self.recipeEdits.insert(row, [nameEdit, layerIndexEdit, datatypeIndexEdit, polarAngleEdit, azimuthalAngleEdit] )
+        azimAngleEdit = pya.QDoubleSpinBox()
+        azimAngleEdit.setValue(0)
+        azimAngleEdit.setMinimum(-360)
+        azimAngleEdit.setMaximum(360)
+        azimAngleEdit.setSingleStep(0.5)
+        azimAngleEdit.decimals = 1
+        azimAngleEdit.valueChanged(self.checkAndApply)
+        self.recipeTable.setCellWidget(row, 4, azimAngleEdit)
+        
+        self.recipeEdits.insert(row, [nameEdit, layerIndexEdit, datatypeIndexEdit, polarAngleEdit, azimAngleEdit] )
      
         
  
@@ -188,6 +194,7 @@ class recipeGui():
             self.recipeTable.cellWidget(row-1, 1).text = self.recipeTable.cellWidget(row+1, 1).text
             self.recipeTable.cellWidget(row-1, 2).text = self.recipeTable.cellWidget(row+1, 2).text
             self.recipeTable.cellWidget(row-1, 3).value = self.recipeTable.cellWidget(row+1, 3).value
+            self.recipeTable.cellWidget(row-1, 4).value = self.recipeTable.cellWidget(row+1, 4).value
             self.removeStep(row+1)
 
             
@@ -199,6 +206,7 @@ class recipeGui():
             self.recipeTable.cellWidget(row+2, 1).text = self.recipeTable.cellWidget(row, 1).text
             self.recipeTable.cellWidget(row+2, 2).text = self.recipeTable.cellWidget(row, 2).text
             self.recipeTable.cellWidget(row+2, 3).value = self.recipeTable.cellWidget(row, 3).value
+            self.recipeTable.cellWidget(row+2, 4).value = self.recipeTable.cellWidget(row, 4).value
             self.removeStep(row)
 
         
@@ -224,12 +232,12 @@ class recipeGui():
             dialog = pya.QDialog(self.window)
             dialog.windowTitle = 'Apply specified process?'
             layout = pya.QVBoxLayout(dialog)
-            label1 = pya.QLabel('&amp;lt;b&amp;gt;All layers specified in the process will be cleared!&amp;lt;/b&amp;gt;')
+            label1 = pya.QLabel('All layers specified in the process will be cleared!')
             warningfont = pya.QFont()
             warningfont.setPointSize(10)
             label1.setFont(warningfont)
             layout.addWidget(label1)
-            label2 = pya.QLabel('These changes can be undone with Ctrl+Z. The \'Auto apply\' option may add a large number of changes to the undo stack.')
+            label2 = pya.QLabel('These changes can be undone with Ctrl+Z (the \'Auto apply\' option may add a large number of changes to the undo stack).')
             label2.setWordWrap(True)
             label2.setFont(warningfont)
             layout.addWidget(label2)
@@ -311,6 +319,7 @@ class recipeGui():
         
         for i in range(self.recipeTable.rowCount):
             polar_angle = float(self.recipeTable.cellWidget(i, 3).value)
+            azim_angle = float(self.recipeTable.cellWidget(i, 4).value)
             try:
                 dest_layer_index = int(self.recipeTable.cellWidget(i, 1).text)
                 dest_datatype_index = int(self.recipeTable.cellWidget(i, 2).text)
@@ -326,9 +335,10 @@ class recipeGui():
             
             layout.clear_layer(dest_layer)
 
-            dy = math.tan(polar_angle*2*math.pi/360)*mask_height
+            dx = math.sin(azim_angle*2*math.pi/360)*math.tan(polar_angle*2*math.pi/360)*mask_height
+            dy = math.cos(azim_angle*2*math.pi/360)*math.tan(polar_angle*2*math.pi/360)*mask_height
 
-            transformation = pya.Matrix3d(1, 0, -0, 1, 0, dy)
+            transformation = pya.Matrix3d(1, 0, -0, 1, dx, dy)
             for sh in shapes_source.each():
                 shapes_dest.insert(transformation*sh.dpolygon)
         
@@ -391,14 +401,14 @@ class recipeGui():
           warning.exec_()
           return
         polar_angle = float(self.recipeTable.cellWidget(i, 3).value)
+        azim_angle = float(self.recipeTable.cellWidget(i, 4).value)
         step_dict[key] = {'Name': name,
                           'Layer index': dest_layer_index,
                           'Datatype index': dest_datatype_index,
-                          'Tilt angle (deg)': polar_angle}
-      print('test')
+                          'Tilt angle (deg)': polar_angle,
+                          'Planetary angle (deg)': azim_angle}
+      
       data = {'Mask properties': mask_properties, 'Deposition steps': step_dict}
-      print(data)
-      print(data)
       savepath = self.fileDialog.getSaveFileName(self.window, 'Save process data', '', "Evaporation processes (*.prc.json)")
       with open(savepath, 'w+') as f:
         try:
@@ -431,12 +441,17 @@ class recipeGui():
           name = steps[key]['Name']
           layer_ix = steps[key]['Layer index']
           dt_ix = steps[key]['Datatype index']
-          angle = steps[key]['Tilt angle (deg)']
+          polar_angle = steps[key]['Tilt angle (deg)']
+          try:
+            azim_angle = steps[key]['Planetary angle (deg)']
+          except KeyError:
+            azim_angle = 0
           self.addStep(i)
           self.recipeTable.cellWidget(i, 0).text = str(name)
           self.recipeTable.cellWidget(i, 1).text = str(layer_ix)
           self.recipeTable.cellWidget(i, 2).text = str(dt_ix)
-          self.recipeTable.cellWidget(i, 3).value = float(angle)
+          self.recipeTable.cellWidget(i, 3).value = float(polar_angle)
+          self.recipeTable.cellWidget(i, 4).value = float(azim_angle)
 
         
       except Exception as e:
